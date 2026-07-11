@@ -125,7 +125,7 @@ void CustomLookAndFeel::drawRotarySlider (juce::Graphics& g,
 {
     juce::ignoreUnused (slider);
 
-    const float margin   = juce::jmin (width, height) * 0.12f;
+    const float margin   = juce::jmin (width, height) * 0.16f; // slightly larger margin for faceplate numbers
     const auto  area     = juce::Rectangle<float> ((float) x, (float) y,
                                                    (float) width, (float) height)
                                .reduced (margin);
@@ -136,146 +136,151 @@ void CustomLookAndFeel::drawRotarySlider (juce::Graphics& g,
     const float angle    = rotaryStartAngle + sliderPos * (rotaryEndAngle - rotaryStartAngle);
 
     const float outerRadius = radius;
-    const float knobRadius  = radius * 0.78f;
+    const float knobRadius  = radius * 0.76f;
 
-    //--- Tick marks and dB labels around the arc ---
+    //--- Tick marks and numbers around the faceplate arc ---
     {
         const float tickInner = outerRadius + 1.0f;
-        const float tickOuter = outerRadius + 6.0f;
-        const int   numTicks  = 11;
+        const float tickOuter = outerRadius + 5.0f;
+        const float labelRadius = outerRadius + 13.0f;
+        const int   numTicks  = 10; // 0 to 10 scale (11 steps total)
 
-        g.setColour (kTextLabel.withAlpha (0.55f));
+        g.setColour (kTextLabel.withAlpha (0.75f));
+        g.setFont (juce::Font (juce::FontOptions ("Arial", juce::jmax (8.5f, radius * 0.18f), juce::Font::bold)));
+
         for (int i = 0; i <= numTicks; ++i)
         {
-            float t     = (float) i / (float) numTicks;
+            float t = (float) i / (float) numTicks;
+            // Angle mapping (swapped sin/cos to make 12 o'clock the top center)
             float tAngle = rotaryStartAngle + t * (rotaryEndAngle - rotaryStartAngle);
 
-            float cosA = std::cos (tAngle);
-            float sinA = std::sin (tAngle);
+            float cosA = std::cos (tAngle - juce::MathConstants<float>::halfPi);
+            float sinA = std::sin (tAngle - juce::MathConstants<float>::halfPi);
 
-            float x1 = centreX + tickInner * sinA;
-            float y1 = centreY - tickInner * cosA;
-            float x2 = centreX + tickOuter * sinA;
-            float y2 = centreY - tickOuter * cosA;
+            // Draw tick line
+            float x1 = centreX + tickInner * cosA;
+            float y1 = centreY + tickInner * sinA;
+            float x2 = centreX + tickOuter * cosA;
+            float y2 = centreY + tickOuter * sinA;
+            g.drawLine (x1, y1, x2, y2, (i % 5 == 0) ? 1.5f : 0.8f);
 
-            float thickness = (i % 5 == 0) ? 1.5f : 0.8f;
-            g.drawLine (x1, y1, x2, y2, thickness);
+            // Draw numbers (e.g. 0, 10, 20... 100 for large knobs, or 0...10 for small)
+            juce::String labelStr;
+            if (width >= 90)
+                labelStr = juce::String (i * 10);
+            else
+                labelStr = juce::String (i);
+
+            float lx = centreX + labelRadius * cosA;
+            float ly = centreY + labelRadius * sinA;
+
+            auto textWidth = g.getCurrentFont().getStringWidth (labelStr);
+            auto textHeight = g.getCurrentFont().getHeight();
+            
+            g.drawText (labelStr,
+                        juce::roundToInt (lx - (float) textWidth * 0.5f),
+                        juce::roundToInt (ly - (float) textHeight * 0.5f) + 1, // small visual tweak
+                        textWidth, textHeight,
+                        juce::Justification::centred, false);
         }
     }
 
     //--- Drop shadow under the knob ---
     {
-        juce::ColourGradient shadow (juce::Colours::black.withAlpha (0.30f),
+        juce::ColourGradient shadow (juce::Colours::black.withAlpha (0.35f),
                                      centreX, centreY,
                                      juce::Colours::transparentBlack,
-                                     centreX, centreY + knobRadius * 1.15f,
+                                     centreX, centreY + outerRadius * 1.15f,
                                      true);
         g.setGradientFill (shadow);
-        g.fillEllipse (centreX - knobRadius * 1.05f,
-                       centreY - knobRadius * 1.05f + 2.0f,
-                       knobRadius * 2.1f,
-                       knobRadius * 2.1f);
+        g.fillEllipse (centreX - outerRadius * 1.05f,
+                       centreY - outerRadius * 1.05f + 3.0f,
+                       outerRadius * 2.1f,
+                       outerRadius * 2.1f);
     }
 
-    //--- Outer knurled ring ---
+    //--- Outer fluted ring body (Black/Charcoal matte) ---
     {
-        // Ring body
-        juce::ColourGradient ringGrad (kKnobBodyTop.brighter (0.15f),
+        juce::Colour baseColor (22, 22, 24);
+        juce::ColourGradient ringGrad (baseColor.brighter (0.1f),
                                        centreX, centreY - outerRadius,
-                                       kKnobBodyBottom,
+                                       baseColor.darker (0.15f),
                                        centreX, centreY + outerRadius,
                                        false);
         g.setGradientFill (ringGrad);
         g.fillEllipse (centreX - outerRadius, centreY - outerRadius,
                        outerRadius * 2.0f, outerRadius * 2.0f);
 
-        // Knurled ridges around the circumference
-        const int numRidges = juce::jmax (24, (int) (outerRadius * 1.5f));
+        // Fluted ridges around the circumference
+        const int numRidges = 36;
         const float ridgeInner = outerRadius * 0.88f;
 
+        g.setColour (juce::Colours::black.withAlpha (0.4f));
         for (int i = 0; i < numRidges; ++i)
         {
             float rAngle = juce::MathConstants<float>::twoPi * (float) i / (float) numRidges;
             float cosR = std::cos (rAngle);
             float sinR = std::sin (rAngle);
 
-            float x1 = centreX + ridgeInner * cosR;
-            float y1 = centreY + ridgeInner * sinR;
-            float x2 = centreX + outerRadius * cosR;
-            float y2 = centreY + outerRadius * sinR;
-
-            // Alternate brightness for 3D ridge effect
-            float alpha = (i % 2 == 0) ? 0.35f : 0.15f;
-            g.setColour (juce::Colours::white.withAlpha (alpha));
-            g.drawLine (x1, y1, x2, y2, 1.0f);
+            // Draw dark valley line
+            g.drawLine (centreX + ridgeInner * cosR, centreY + ridgeInner * sinR,
+                        centreX + outerRadius * cosR, centreY + outerRadius * sinR, 1.2f);
         }
     }
 
-    //--- Inner knob face (recessed look) ---
+    //--- Inner knob face (recessed fluted cylinder) ---
     {
-        juce::ColourGradient innerGrad (kKnobBodyTop,
+        juce::Colour baseColor (28, 28, 30);
+        juce::ColourGradient innerGrad (baseColor,
                                         centreX, centreY - knobRadius,
-                                        kKnobBodyBottom.darker (0.15f),
+                                        baseColor.darker (0.25f),
                                         centreX, centreY + knobRadius,
                                         false);
         g.setGradientFill (innerGrad);
         g.fillEllipse (centreX - knobRadius, centreY - knobRadius,
                        knobRadius * 2.0f, knobRadius * 2.0f);
 
-        // Subtle highlight arc on top-left
-        juce::ColourGradient highlight (juce::Colours::white.withAlpha (0.12f),
-                                        centreX - knobRadius * 0.4f,
-                                        centreY - knobRadius * 0.5f,
-                                        juce::Colours::transparentBlack,
-                                        centreX + knobRadius * 0.3f,
-                                        centreY + knobRadius * 0.3f,
-                                        true);
-        g.setGradientFill (highlight);
-        g.fillEllipse (centreX - knobRadius, centreY - knobRadius,
-                       knobRadius * 2.0f, knobRadius * 2.0f);
-
-        // Thin bright rim
-        g.setColour (juce::Colours::white.withAlpha (0.08f));
+        // 3D edge rim highlight
+        g.setColour (juce::Colours::white.withAlpha (0.1f));
         g.drawEllipse (centreX - knobRadius, centreY - knobRadius,
                        knobRadius * 2.0f, knobRadius * 2.0f, 1.0f);
     }
 
     //--- Pointer / indicator line ---
     {
-        const float pointerLength = knobRadius * 0.75f;
-        const float pointerWidth  = juce::jmax (2.0f, knobRadius * 0.08f);
+        const float pointerLength = knobRadius * 0.95f;
+        const float pointerWidth  = juce::jmax (1.8f, knobRadius * 0.07f);
 
         juce::Path pointerPath;
-        pointerPath.addRoundedRectangle (-pointerWidth * 0.5f, -pointerLength,
-                                         pointerWidth, pointerLength,
-                                         pointerWidth * 0.35f);
+        pointerPath.addRectangle (-pointerWidth * 0.5f, -pointerLength,
+                                  pointerWidth, pointerLength);
 
         g.setColour (kKnobPointer);
         g.fillPath (pointerPath, juce::AffineTransform::rotation (angle)
                                       .translated (centreX, centreY));
-
-        // Small dot at the tip for visibility
-        float tipX = centreX + std::sin (angle) * (knobRadius * 0.68f);
-        float tipY = centreY - std::cos (angle) * (knobRadius * 0.68f);
-        g.setColour (kKnobPointer);
-        g.fillEllipse (tipX - 2.5f, tipY - 2.5f, 5.0f, 5.0f);
     }
 
-    //--- Centre cap ---
+    //--- Center cap (Large brushed-metal silver cap, typical of LA-2A) ---
     {
-        const float capRadius = knobRadius * 0.18f;
-        juce::ColourGradient capGrad (kKnobBodyTop.brighter (0.25f),
-                                      centreX, centreY - capRadius,
-                                      kKnobBodyBottom,
-                                      centreX, centreY + capRadius,
-                                      false);
+        const float capRadius = knobRadius * 0.44f;
+        juce::ColourGradient capGrad (juce::Colour (245, 245, 245),
+                                      centreX - capRadius * 0.4f, centreY - capRadius * 0.4f,
+                                      juce::Colour (180, 182, 185),
+                                      centreX + capRadius * 0.4f, centreY + capRadius * 0.4f,
+                                      true);
         g.setGradientFill (capGrad);
         g.fillEllipse (centreX - capRadius, centreY - capRadius,
                        capRadius * 2.0f, capRadius * 2.0f);
 
-        g.setColour (juce::Colours::white.withAlpha (0.10f));
+        // Center cap black ring outline
+        g.setColour (juce::Colour (30, 30, 32));
         g.drawEllipse (centreX - capRadius, centreY - capRadius,
-                       capRadius * 2.0f, capRadius * 2.0f, 0.8f);
+                       capRadius * 2.0f, capRadius * 2.0f, 1.0f);
+
+        // High gloss highlight
+        g.setColour (juce::Colours::white.withAlpha (0.15f));
+        g.drawEllipse (centreX - capRadius + 1.0f, centreY - capRadius + 1.0f,
+                       (capRadius - 1.0f) * 2.0f, (capRadius - 1.0f) * 2.0f, 0.8f);
     }
 }
 
@@ -288,74 +293,92 @@ void CustomLookAndFeel::drawToggleButton (juce::Graphics& g,
                                           bool shouldDrawButtonAsHighlighted,
                                           bool shouldDrawButtonAsDown)
 {
-    juce::ignoreUnused (shouldDrawButtonAsDown);
+    juce::ignoreUnused (shouldDrawButtonAsHighlighted, shouldDrawButtonAsDown);
 
-    const auto bounds = button.getLocalBounds().toFloat().reduced (4.0f);
+    const auto bounds = button.getLocalBounds().toFloat();
     const bool isOn   = button.getToggleState();
 
-    // Switch track dimensions
-    const float trackW = juce::jmin (bounds.getWidth() * 0.55f, 44.0f);
-    const float trackH = trackW * 0.50f;
-    const auto  trackArea = juce::Rectangle<float> (0, 0, trackW, trackH)
-                                .withCentre ({ bounds.getCentreX(),
-                                               bounds.getCentreY() - bounds.getHeight() * 0.05f });
+    const float centreX = bounds.getCentreX();
+    const float centreY = bounds.getCentreY() - 6.0f; // Shift up to leave room for label
 
-    // Track shadow
-    g.setColour (juce::Colours::black.withAlpha (0.18f));
-    g.fillRoundedRectangle (trackArea.translated (0.0f, 2.0f), trackH * 0.35f);
-
-    // Track body
+    //--- Threaded mounting ring (metal finish) ---
     {
-        juce::Colour trackCol = isOn ? kAccentAmber.darker (0.15f) : juce::Colour (90, 90, 95);
-        juce::ColourGradient trackGrad (trackCol.brighter (0.15f),
-                                        trackArea.getX(), trackArea.getY(),
-                                        trackCol.darker  (0.2f),
-                                        trackArea.getX(), trackArea.getBottom(),
+        const float nutRadius = 11.5f;
+
+        // Shadow under the ring
+        g.setColour (juce::Colours::black.withAlpha (0.15f));
+        g.fillEllipse (centreX - nutRadius, centreY - nutRadius + 1.5f, nutRadius * 2.0f, nutRadius * 2.0f);
+
+        // Metal base ring gradient
+        juce::ColourGradient nutGrad (juce::Colour (210, 210, 212),
+                                      centreX - nutRadius * 0.5f, centreY - nutRadius * 0.5f,
+                                      juce::Colour (135, 135, 138),
+                                      centreX + nutRadius * 0.5f, centreY + nutRadius * 0.5f,
+                                      true);
+        g.setGradientFill (nutGrad);
+        g.fillEllipse (centreX - nutRadius, centreY - nutRadius, nutRadius * 2.0f, nutRadius * 2.0f);
+
+        // Highlight ring
+        g.setColour (juce::Colours::white.withAlpha (0.3f));
+        g.drawEllipse (centreX - nutRadius + 1.0f, centreY - nutRadius + 1.0f, (nutRadius - 1.0f) * 2.0f, (nutRadius - 1.0f) * 2.0f, 0.8f);
+
+        // Outer dark edge
+        g.setColour (juce::Colour (90, 90, 92));
+        g.drawEllipse (centreX - nutRadius, centreY - nutRadius, nutRadius * 2.0f, nutRadius * 2.0f, 1.0f);
+    }
+
+    //--- Inner dark switch hole ---
+    {
+        const float holeRadius = 5.0f;
+        g.setColour (juce::Colour (20, 20, 22));
+        g.fillEllipse (centreX - holeRadius, centreY - holeRadius, holeRadius * 2.0f, holeRadius * 2.0f);
+    }
+
+    //--- Metal Switch Lever (vertical bat shape) ---
+    {
+        const float leverLength = 15.5f;
+        const float leverWidthBottom = 3.5f;
+        const float leverWidthTop = 2.2f;
+
+        // Up for active, down for inactive (simulate real toggle click)
+        float leverAngle = isOn ? juce::degreesToRadians (-14.0f) : juce::degreesToRadians (14.0f);
+
+        juce::Path lever;
+        lever.startNewSubPath (-leverWidthBottom * 0.5f, 0.0f);
+        lever.lineTo (-leverWidthTop * 0.5f, -leverLength);
+        lever.quadraticTo (0.0f, -leverLength - 2.0f, leverWidthTop * 0.5f, -leverLength);
+        lever.lineTo (leverWidthBottom * 0.5f, 0.0f);
+        lever.closeSubPath();
+
+        // Rotate and place
+        lever.applyTransform (juce::AffineTransform::rotation (leverAngle).translated (centreX, centreY));
+
+        // Lever shadow
+        g.setColour (juce::Colours::black.withAlpha (0.3f));
+        g.fillPath (lever, juce::AffineTransform::translation (1.5f, 2.5f));
+
+        // Lever metal gradient
+        juce::ColourGradient leverGrad (juce::Colour (255, 255, 255),
+                                        centreX, centreY - leverLength,
+                                        juce::Colour (130, 132, 135),
+                                        centreX, centreY,
                                         false);
-        g.setGradientFill (trackGrad);
-        g.fillRoundedRectangle (trackArea, trackH * 0.35f);
+        g.setGradientFill (leverGrad);
+        g.fillPath (lever);
 
-        // Inner recessed groove
-        g.setColour (juce::Colours::black.withAlpha (0.20f));
-        auto groove = trackArea.reduced (2.5f);
-        g.fillRoundedRectangle (groove, groove.getHeight() * 0.35f);
+        // Light specular edge highlight
+        g.setColour (juce::Colours::white.withAlpha (0.35f));
+        g.strokePath (lever, juce::PathStrokeType (0.5f));
     }
 
-    // Thumb / switch knob
-    {
-        const float thumbDiam = trackH * 0.80f;
-        const float thumbR    = thumbDiam * 0.5f;
-        const float travel    = trackW - thumbDiam - 6.0f;
-
-        float thumbX = trackArea.getX() + 3.0f + (isOn ? travel : 0.0f);
-        float thumbY = trackArea.getCentreY() - thumbR;
-
-        // Shadow
-        g.setColour (juce::Colours::black.withAlpha (0.25f));
-        g.fillEllipse (thumbX + 1.0f, thumbY + 2.0f, thumbDiam, thumbDiam);
-
-        // Thumb gradient
-        juce::ColourGradient tGrad (juce::Colour (220, 220, 220),
-                                     thumbX + thumbR, thumbY,
-                                     juce::Colour (170, 170, 170),
-                                     thumbX + thumbR, thumbY + thumbDiam,
-                                     false);
-        g.setGradientFill (tGrad);
-        g.fillEllipse (thumbX, thumbY, thumbDiam, thumbDiam);
-
-        // Highlight rim
-        g.setColour (juce::Colours::white.withAlpha (shouldDrawButtonAsHighlighted ? 0.25f : 0.10f));
-        g.drawEllipse (thumbX, thumbY, thumbDiam, thumbDiam, 1.0f);
-    }
-
-    // Label text below the switch
+    //--- Label text below the switch ---
     {
         g.setColour (kTextLabel);
-        g.setFont (juce::Font (juce::FontOptions ("Arial", juce::jmin (13.0f, bounds.getHeight() * 0.18f), juce::Font::plain)));
+        g.setFont (juce::Font (juce::FontOptions ("Arial", juce::jmax (9.5f, bounds.getHeight() * 0.16f), juce::Font::bold)));
 
-        auto textArea = bounds;
-        textArea.setTop (trackArea.getBottom() + 4.0f);
-        g.drawFittedText (button.getButtonText(), textArea.toNearestInt(),
+        auto labelArea = bounds;
+        labelArea.setTop (centreY + 14.0f);
+        g.drawFittedText (button.getButtonText(), labelArea.toNearestInt(),
                           juce::Justification::centredTop, 1);
     }
 }

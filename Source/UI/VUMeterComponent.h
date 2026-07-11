@@ -53,6 +53,7 @@ private:
     void  drawLevelBar  (juce::Graphics& g, juce::Rectangle<float> bounds,
                          float levelDb, const juce::String& label, bool isInput);
     float grDbToAngle   (float grDb) const;
+    float dbToNormalized (float db) const;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (VUMeterComponent)
 };
