@@ -1,0 +1,48 @@
+name: Build macOS Plugin
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build-mac:
+    name: Build macOS VST3 / AU / Standalone
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Configure CMake
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build Targets
+        run: |
+          cmake --build build --config Release --parallel 4
+
+      - name: Prepare Artifacts
+        run: |
+          mkdir -p dist
+          # Copy VST3 bundle
+          cp -R build/Valvane_artefacts/Release/VST3/Valvane.vst3 dist/
+          # Copy AU (Component) bundle
+          cp -R build/Valvane_artefacts/Release/AU/Valvane.component dist/
+          # Copy Standalone app bundle
+          cp -R build/Valvane_artefacts/Release/Standalone/Valvane.app dist/
+
+      - name: Zip Artifacts
+        run: |
+          cd dist
+          zip -r ../Valvane-macOS.zip Valvane.vst3 Valvane.component Valvane.app
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Valvane-macOS-Build
+          path: Valvane-macOS.zip
